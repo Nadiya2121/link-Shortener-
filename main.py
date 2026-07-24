@@ -13,20 +13,18 @@ def generate_code():
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
 
 # ==========================================
-# 🤖 TELEGRAM BOT ENGINE (CONFLICT FREE THREAD)
+# 🤖 TELEGRAM BOT ENGINE (AUTOMATED THREAD)
 # ==========================================
 def start_telegram_bot():
     if TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_TOKEN != "YOUR_TELEGRAM_BOT_TOKEN_HERE":
         try:
             bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
-            # ১. আগের জটলা ও পুরানো পন্ডিং রিকোয়েস্ট ডিলিট করা
             try:
                 bot.remove_webhook(drop_pending_updates=True)
             except Exception:
                 pass
 
-            # /start and /help Command Response
             @bot.message_handler(commands=['start', 'help'])
             def send_welcome(message):
                 welcome_text = (
@@ -40,7 +38,6 @@ def start_telegram_bot():
                 )
                 bot.reply_to(message, welcome_text, parse_mode='Markdown')
 
-            # Handle incoming long URLs
             @bot.message_handler(func=lambda message: True)
             def process_url(message):
                 long_url = message.text.strip()
@@ -64,7 +61,6 @@ def start_telegram_bot():
                     bot.reply_to(message, "⚠️ *Invalid Link Format!*\nPlease send a valid link starting with `http://` or `https://`", parse_mode='Markdown')
 
             print("🤖 Telegram Bot Engine Running Cleanly!")
-            # skip_pending=True ব্যবহারে কনফ্লিক্ট এরর আসবে না
             bot.infinity_polling(none_stop=True, skip_pending=True)
         except Exception as e:
             print(f"❌ Telegram Bot Thread Handled: {e}")
@@ -73,8 +69,96 @@ threading.Thread(target=start_telegram_bot, daemon=True).start()
 
 
 # ==========================================
-# 🌐 FIXED USER DASHBOARD (PRIVACY & COPY FIX)
+# 🌐 AUTH & DASHBOARD HTML TEMPLATES
 # ==========================================
+LOGIN_HTML = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Publisher Login - CloudLink Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-950 text-white min-h-screen flex items-center justify-center p-4 font-sans">
+    <div class="bg-slate-900 p-8 rounded-3xl border border-cyan-500/30 max-w-md w-full space-y-6 shadow-2xl">
+        <div class="text-center space-y-2">
+            <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-fuchsia-400">CloudLink Pro</h2>
+            <p class="text-xs text-slate-400">Publisher Login Portal</p>
+        </div>
+        
+        {% if error %}
+        <div class="bg-rose-500/10 border border-rose-500/30 p-3 rounded-xl text-xs text-rose-400 text-center font-bold">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form action="/login" method="POST" class="space-y-4">
+            <div>
+                <label class="text-xs font-bold text-slate-400 block mb-1">Username</label>
+                <input type="text" name="username" placeholder="Enter Username" required class="w-full p-3.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400">
+            </div>
+            <div>
+                <label class="text-xs font-bold text-slate-400 block mb-1">Password</label>
+                <input type="password" name="password" placeholder="Enter Password" required class="w-full p-3.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400">
+            </div>
+            <button type="submit" class="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-black rounded-xl hover:scale-101 transition shadow-[0_0_15px_rgba(6,182,212,0.4)]">
+                LOGIN TO DASHBOARD 🚀
+            </button>
+        </form>
+
+        <p class="text-xs text-center text-slate-500">Don't have an account? <a href="/register" class="text-cyan-400 font-bold hover:underline">Register Here</a></p>
+    </div>
+</body>
+</html>
+"""
+
+REGISTER_HTML = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Publisher Registration - CloudLink Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-950 text-white min-h-screen flex items-center justify-center p-4 font-sans">
+    <div class="bg-slate-900 p-8 rounded-3xl border border-cyan-500/30 max-w-md w-full space-y-6 shadow-2xl">
+        <div class="text-center space-y-2">
+            <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-fuchsia-400">CloudLink Pro</h2>
+            <p class="text-xs text-slate-400">Create Publisher Account</p>
+        </div>
+        
+        {% if error %}
+        <div class="bg-rose-500/10 border border-rose-500/30 p-3 rounded-xl text-xs text-rose-400 text-center font-bold">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form action="/register" method="POST" class="space-y-4">
+            <div>
+                <label class="text-xs font-bold text-slate-400 block mb-1">Username</label>
+                <input type="text" name="username" placeholder="Choose Username" required class="w-full p-3.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400">
+            </div>
+            <div>
+                <label class="text-xs font-bold text-slate-400 block mb-1">Email Address</label>
+                <input type="email" name="email" placeholder="Enter Email" required class="w-full p-3.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400">
+            </div>
+            <div>
+                <label class="text-xs font-bold text-slate-400 block mb-1">Password</label>
+                <input type="password" name="password" placeholder="Choose Password" required class="w-full p-3.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400">
+            </div>
+            <button type="submit" class="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-black rounded-xl hover:scale-101 transition shadow-[0_0_15px_rgba(6,182,212,0.4)]">
+                CREATE ACCOUNT ✨
+            </button>
+        </form>
+
+        <p class="text-xs text-center text-slate-500">Already have an account? <a href="/login" class="text-cyan-400 font-bold hover:underline">Login Here</a></p>
+    </div>
+</body>
+</html>
+"""
+
 USER_DASHBOARD = """
 <!DOCTYPE html>
 <html lang="en">
@@ -92,13 +176,18 @@ USER_DASHBOARD = """
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 p-6 rounded-2xl border border-slate-800 gap-4">
             <div>
                 <h1 class="text-xl font-bold text-cyan-400 flex items-center gap-2">
-                    <i class="fa-solid fa-user-shield"></i> {{ user.username }}
+                    <i class="fa-solid fa-user-circle"></i> {{ user.username }}
                 </h1>
-                <p class="text-xs text-slate-400">Private Publisher Session</p>
+                <p class="text-xs text-slate-400">Publisher Rate: <span class="text-emerald-400 font-bold">${{ settings.cpmRate }} / 1,000 Views</span></p>
             </div>
-            <div class="bg-slate-950 px-5 py-3 rounded-xl border border-slate-800 text-right w-full md:w-auto">
-                <span class="text-xs text-slate-500 block">AVAILABLE BALANCE</span>
-                <span class="text-2xl font-black text-emerald-400">${{ "%.2f"|format(user.balance) }}</span>
+            <div class="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+                <div class="bg-slate-950 px-5 py-3 rounded-xl border border-slate-800 text-right">
+                    <span class="text-xs text-slate-500 block">AVAILABLE BALANCE</span>
+                    <span class="text-2xl font-black text-emerald-400">${{ "%.3f"|format(user.balance) }}</span>
+                </div>
+                <a href="/logout" class="bg-rose-500/10 text-rose-400 p-3.5 rounded-xl hover:bg-rose-500/20 transition" title="Logout">
+                    <i class="fa-solid fa-right-from-bracket text-lg"></i>
+                </a>
             </div>
         </div>
 
@@ -124,19 +213,39 @@ USER_DASHBOARD = """
             </form>
         </div>
 
-        <!-- Withdrawal Section -->
+        <!-- Withdrawal Section (bKash / Nagad / Rocket) -->
         <div class="bg-slate-900 p-6 rounded-2xl border border-slate-800 space-y-4">
-            <h2 class="text-lg font-bold text-emerald-400"><i class="fa-solid fa-wallet mr-2"></i>Withdraw Earnings</h2>
+            <h2 class="text-lg font-bold text-emerald-400 flex items-center gap-2">
+                <i class="fa-solid fa-wallet"></i> Withdraw Earnings (Min Limit: ${{ settings.minWithdraw }})
+            </h2>
+            
             <form action="/withdraw" method="POST" class="flex flex-col md:flex-row gap-3">
                 <input type="number" step="0.1" name="amount" placeholder="Amount ($)" required class="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white">
-                <select name="method" class="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-cyan-400">
-                    <option value="bKash">bKash</option>
-                    <option value="Nagad">Nagad</option>
-                    <option value="Binance/Crypto">Binance (USDT)</option>
+                <select name="method" class="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-cyan-400 font-bold">
+                    <option value="bKash">bKash (Personal)</option>
+                    <option value="Nagad">Nagad (Personal)</option>
+                    <option value="Rocket">Rocket (Personal)</option>
                 </select>
-                <input type="text" name="account" placeholder="Account No / Wallet Address" required class="flex-grow p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white">
-                <button type="submit" class="px-6 py-3 bg-emerald-500 text-slate-950 font-bold rounded-xl hover:bg-emerald-400">WITHDRAW</button>
+                <input type="text" name="account" placeholder="Enter Mobile Number (017...)" required class="flex-grow p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white">
+                <button type="submit" class="px-6 py-3 bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl hover:bg-emerald-400 transition">WITHDRAW</button>
             </form>
+
+            <!-- User Withdrawal History -->
+            <div class="pt-4 border-t border-slate-800 space-y-2">
+                <h3 class="text-xs font-bold text-slate-400 mb-2">Withdrawal History</h3>
+                {% for w in user_withdrawals %}
+                <div class="p-3 bg-slate-950 rounded-xl flex justify-between items-center text-xs border border-slate-800/80">
+                    <div>
+                        <span class="font-bold text-white">${{ w.amount }}</span> via <span class="text-cyan-400 font-bold">{{ w.method }}</span> ({{ w.account }})
+                    </div>
+                    <span class="px-2.5 py-1 rounded font-bold {% if w.status=='Approved' %}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30{% elif w.status=='Rejected' %}bg-rose-500/10 text-rose-400 border border-rose-500/30{% else %}bg-yellow-500/10 text-yellow-400 border border-yellow-500/30{% endif %}">
+                        {{ w.status }}
+                    </span>
+                </div>
+                {% else %}
+                <p class="text-xs text-slate-600">No withdrawal requests submitted yet.</p>
+                {% endfor %}
+            </div>
         </div>
 
         <!-- Private User Links Table (FIXED OVERFLOW & 1-CLICK COPY) -->
@@ -262,61 +371,90 @@ PHASE_HTML = """
 
 
 # ==========================================
-# 🌐 FLASK WEB ROUTES
+# 🌐 FLASK WEB ROUTES & AUTH
 # ==========================================
 @app.route('/')
 def home():
-    if 'user_id' not in session:
-        session['user_id'] = f"usr_{uuid.uuid4().hex[:8]}"
+    if 'user' not in session:
+        return redirect('/login')
 
-    user_id = session['user_id']
-    user = users_col.find_one({"username": user_id})
+    user = users_col.find_one({"username": session['user']})
     if not user:
-        users_col.insert_one({"username": user_id, "balance": 0.0})
-        user = users_col.find_one({"username": user_id})
-    
-    # Fetch ONLY THIS USER'S LINKS
-    links = list(urls_col.find({"owner": user_id}).sort('_id', -1))
-    return render_template_string(USER_DASHBOARD, user=user, links=links, host=request.host)
+        session.pop('user', None)
+        return redirect('/login')
+
+    links = list(urls_col.find({"owner": session['user']}).sort('_id', -1))
+    user_withdrawals = list(withdrawals_col.find({"username": session['user']}).sort('_id', -1))
+    settings = get_settings()
+
+    return render_template_string(USER_DASHBOARD, user=user, links=links, user_withdrawals=user_withdrawals, settings=settings, host=request.host)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        user = users_col.find_one({"username": username, "password": password})
+        if user:
+            session['user'] = username
+            return redirect('/')
+        return render_template_string(LOGIN_HTML, error="Invalid Username or Password!")
+    return render_template_string(LOGIN_HTML)
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '').strip()
+
+        if users_col.find_one({"username": username}):
+            return render_template_string(REGISTER_HTML, error="Username already exists!")
+
+        users_col.insert_one({"username": username, "email": email, "password": password, "balance": 0.0})
+        session['user'] = username
+        return redirect('/')
+    return render_template_string(REGISTER_HTML)
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    return redirect('/login')
 
 @app.route('/shorten', methods=['POST'])
 def shorten():
-    if 'user_id' not in session:
-        session['user_id'] = f"usr_{uuid.uuid4().hex[:8]}"
+    if 'user' not in session: return redirect('/login')
 
     long_url = request.form.get('url')
     custom_alias = request.form.get('custom_alias')
     password = request.form.get('password')
-    
+
     code = custom_alias.strip() if custom_alias and custom_alias.strip() else generate_code()
-    
-    urls_col.insert_one({
-        "code": code,
-        "url": long_url,
-        "password": password,
-        "owner": session['user_id'],
-        "clicks": 0
-    })
+    urls_col.insert_one({"code": code, "url": long_url, "password": password, "owner": session['user'], "clicks": 0})
     return redirect('/')
 
 @app.route('/withdraw', methods=['POST'])
 def withdraw():
-    if 'user_id' not in session: return redirect('/')
+    if 'user' not in session: return redirect('/login')
 
     amount = float(request.form.get('amount', 0))
     method = request.form.get('method')
     account = request.form.get('account')
-    
-    user_id = session['user_id']
-    user = users_col.find_one({"username": user_id})
+    settings = get_settings()
+
+    user = users_col.find_one({"username": session['user']})
+    if amount < settings.get('minWithdraw', 2.0):
+        return redirect('/')
+
     if user and user.get('balance', 0) >= amount and amount > 0:
-        users_col.update_one({"username": user_id}, {"$inc": {"balance": -amount}})
+        users_col.update_one({"username": session['user']}, {"$inc": {"balance": -amount}})
         withdrawals_col.insert_one({
-            "username": user_id,
+            "username": session['user'],
             "amount": amount,
             "method": method,
             "account": account,
-            "status": "Pending"
+            "status": "Pending",
+            "timestamp": datetime.datetime.now()
         })
     return redirect('/')
 
@@ -338,17 +476,15 @@ def handle_phase(code, phase_num):
                    </form>'''
 
     settings = get_settings()
+    total_phases = settings.get('phaseCount', 2)
 
-    # Geo CPM Rule (US/UK gets 3 phases, others get 2)
-    ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-    total_phases = 3 if "1.1.1." in ip else 2 
-
-    # Credit publisher earnings on Phase 1
+    # Dynamic CPM Calculation ($1 CPM = $0.001 per view)
     if phase_num == 1:
-        owner = url_data.get('owner', 'demo_publisher')
-        cpm_rate = settings['cpmRates'].get('DEFAULT', 2.0)
-        earning_per_click = cpm_rate / 1000.0
-        users_col.update_one({"username": owner}, {"$inc": {"balance": earning_per_click}})
+        owner = url_data.get('owner')
+        if owner:
+            cpm_rate = settings.get('cpmRate', 1.0)
+            earning_per_click = cpm_rate / 1000.0
+            users_col.update_one({"username": owner}, {"$inc": {"balance": earning_per_click}})
 
     return render_template_string(PHASE_HTML, code=code, settings=settings, current_phase=phase_num, total_phases=total_phases)
 
