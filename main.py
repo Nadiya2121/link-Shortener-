@@ -6,20 +6,27 @@ from config import urls_col, analytics_col, users_col, withdrawals_col, get_sett
 from admin import admin_bp
 
 app = Flask(__name__)
-app.secret_key = "super_secret_saas_key_12345"
+app.secret_key = "super_secret_saas_key_998877"
 app.register_blueprint(admin_bp)
 
 def generate_code():
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
 
 # ==========================================
-# 🤖 TELEGRAM BOT ENGINE (AUTOMATED THREAD)
+# 🤖 TELEGRAM BOT ENGINE (CONFLICT FREE THREAD)
 # ==========================================
 def start_telegram_bot():
     if TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_TOKEN != "YOUR_TELEGRAM_BOT_TOKEN_HERE":
         try:
             bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
+            # ১. আগের জটলা ও পুরানো পন্ডিং রিকোয়েস্ট ডিলিট করা
+            try:
+                bot.remove_webhook(drop_pending_updates=True)
+            except Exception:
+                pass
+
+            # /start and /help Command Response
             @bot.message_handler(commands=['start', 'help'])
             def send_welcome(message):
                 welcome_text = (
@@ -33,6 +40,7 @@ def start_telegram_bot():
                 )
                 bot.reply_to(message, welcome_text, parse_mode='Markdown')
 
+            # Handle incoming long URLs
             @bot.message_handler(func=lambda message: True)
             def process_url(message):
                 long_url = message.text.strip()
@@ -55,10 +63,11 @@ def start_telegram_bot():
                 else:
                     bot.reply_to(message, "⚠️ *Invalid Link Format!*\nPlease send a valid link starting with `http://` or `https://`", parse_mode='Markdown')
 
-            print("🤖 Telegram Bot Engine Running & Ready!")
-            bot.infinity_polling(none_stop=True)
+            print("🤖 Telegram Bot Engine Running Cleanly!")
+            # skip_pending=True ব্যবহারে কনফ্লিক্ট এরর আসবে না
+            bot.infinity_polling(none_stop=True, skip_pending=True)
         except Exception as e:
-            print(f"❌ Telegram Bot Error: {e}")
+            print(f"❌ Telegram Bot Thread Handled: {e}")
 
 threading.Thread(target=start_telegram_bot, daemon=True).start()
 
@@ -257,7 +266,6 @@ PHASE_HTML = """
 # ==========================================
 @app.route('/')
 def home():
-    # Generate unique user session ID for privacy
     if 'user_id' not in session:
         session['user_id'] = f"usr_{uuid.uuid4().hex[:8]}"
 
@@ -267,7 +275,7 @@ def home():
         users_col.insert_one({"username": user_id, "balance": 0.0})
         user = users_col.find_one({"username": user_id})
     
-    # Fetch ONLY THIS USER'S LINKS for strict privacy
+    # Fetch ONLY THIS USER'S LINKS
     links = list(urls_col.find({"owner": user_id}).sort('_id', -1))
     return render_template_string(USER_DASHBOARD, user=user, links=links, host=request.host)
 
