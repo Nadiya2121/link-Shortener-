@@ -1,8 +1,8 @@
-import random, string, datetime
+import random, string, datetime, threading
 from flask import Flask, request, redirect, render_template_string, session, url_for
 from user_agents import parse
-import requests
-from config import urls_col, analytics_col, users_col, withdrawals_col, get_settings
+import telebot
+from config import urls_col, analytics_col, users_col, withdrawals_col, get_settings, TELEGRAM_BOT_TOKEN
 from admin import admin_bp
 
 app = Flask(__name__)
@@ -12,13 +12,71 @@ app.register_blueprint(admin_bp)
 def generate_code():
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
 
-# --- HTML TEMPLATES ---
+# ==========================================
+# 🤖 TELEGRAM BOT ENGINE (AUTOMATED THREAD)
+# ==========================================
+def start_telegram_bot():
+    if TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_TOKEN != "YOUR_TELEGRAM_BOT_TOKEN_HERE":
+        try:
+            bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
+
+            # /start and /help Command Response
+            @bot.message_handler(commands=['start', 'help'])
+            def send_welcome(message):
+                welcome_text = (
+                    "⚡ *Welcome to CloudLink Pro Bot!*\n\n"
+                    "I am your automated URL Shortener Bot. Send me any long link, and I will convert it into a short, profitable link in 1 second!\n\n"
+                    "📌 *How to Use Me?*\n"
+                    "1️⃣ Copy any long URL (must start with `http://` or `https://`)\n"
+                    "2️⃣ Paste and send the link in this chat\n"
+                    "3️⃣ Receive your shortened link instantly!\n\n"
+                    "🚀 *Send your first link now!*"
+                )
+                bot.reply_to(message, welcome_text, parse_mode='Markdown')
+
+            # Handle incoming long URLs
+            @bot.message_handler(func=lambda message: True)
+            def process_url(message):
+                long_url = message.text.strip()
+                if long_url.startswith("http://") or long_url.startswith("https://"):
+                    code = generate_code()
+                    urls_col.insert_one({
+                        "code": code,
+                        "url": long_url,
+                        "owner": f"tg_{message.from_user.id}",
+                        "clicks": 0
+                    })
+                    
+                    # Auto domain selector (Render live domain)
+                    short_url = f"https://link-shortener-4obu.onrender.com/go/{code}"
+                    
+                    success_text = (
+                        "✅ *Link Shortened Successfully!*\n\n"
+                        f"🔗 *Your Short Link:*\n`{short_url}`\n\n"
+                        "💡 _Tap on the link above to copy it instantly!_"
+                    )
+                    bot.reply_to(message, success_text, parse_mode='Markdown')
+                else:
+                    bot.reply_to(message, "⚠️ *Invalid Link Format!*\nPlease send a valid link starting with `http://` or `https://`", parse_mode='Markdown')
+
+            print("🤖 Telegram Bot Engine Running & Ready for Commands!")
+            bot.infinity_polling(none_stop=True)
+        except Exception as e:
+            print(f"❌ Telegram Bot Error: {e}")
+
+# Run Bot in Background Thread so Flask app doesn't block
+threading.Thread(target=start_telegram_bot, daemon=True).start()
+
+
+# ==========================================
+# 🌐 HTML TEMPLATES FOR WEB DASHBOARD & PHASES
+# ==========================================
 USER_DASHBOARD = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Publisher Dashboard</title>
+    <title>Publisher Dashboard - CloudLink Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -28,8 +86,8 @@ USER_DASHBOARD = """
         <!-- Header & Balance -->
         <div class="flex justify-between items-center bg-slate-900 p-6 rounded-2xl border border-slate-800">
             <div>
-                <h1 class="text-xl font-bold text-cyan-400">Welcome, {{ user.username }}</h1>
-                <p class="text-xs text-slate-400">Publisher Dashboard</p>
+                <h1 class="text-xl font-bold text-cyan-400"><i class="fa-solid fa-user-gear mr-2"></i>{{ user.username }}</h1>
+                <p class="text-xs text-slate-400">Publisher Account Overview</p>
             </div>
             <div class="text-right">
                 <span class="text-xs text-slate-500 block">AVAILABLE BALANCE</span>
@@ -37,22 +95,22 @@ USER_DASHBOARD = """
             </div>
         </div>
 
-        <!-- Shorten Link Form (With Custom Alias & Password Protection) -->
+        <!-- Shorten Link Form -->
         <div class="bg-slate-900 p-6 rounded-2xl border border-cyan-500/30">
             <h2 class="text-lg font-bold text-white mb-4"><i class="fa-solid fa-link text-cyan-400 mr-2"></i>Create Advanced Short Link</h2>
             <form action="/shorten" method="POST" class="space-y-4">
-                <input type="url" name="url" placeholder="Paste Destination Long URL..." required class="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white">
+                <input type="url" name="url" placeholder="Paste Destination Long URL here..." required class="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input type="text" name="custom_alias" placeholder="Custom Alias (Optional, e.g., my-file)" class="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-cyan-300">
-                    <input type="password" name="password" placeholder="Set Protection Password (Optional)" class="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-fuchsia-300">
+                    <input type="text" name="custom_alias" placeholder="Custom Alias (Optional, e.g. my-file)" class="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-cyan-300">
+                    <input type="password" name="password" placeholder="Protection Password (Optional)" class="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-fuchsia-300">
                 </div>
-                <button type="submit" class="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-black rounded-xl">SHORTEN LINK ⚡</button>
+                <button type="submit" class="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-black rounded-xl hover:scale-101 transition">SHORTEN LINK ⚡</button>
             </form>
         </div>
 
         <!-- Withdrawal Section -->
         <div class="bg-slate-900 p-6 rounded-2xl border border-slate-800 space-y-4">
-            <h2 class="text-lg font-bold text-emerald-400"><i class="fa-solid fa-wallet mr-2"></i>Withdraw Earnings</h2>
+            <h2 class="text-lg font-bold text-emerald-400"><i class="fa-solid fa-wallet mr-2"></i>Request Earnings Withdrawal</h2>
             <form action="/withdraw" method="POST" class="flex flex-col md:flex-row gap-3">
                 <input type="number" step="0.1" name="amount" placeholder="Amount ($)" required class="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white">
                 <select name="method" class="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-cyan-400">
@@ -61,22 +119,22 @@ USER_DASHBOARD = """
                     <option value="Binance/Crypto">Binance (USDT)</option>
                 </select>
                 <input type="text" name="account" placeholder="Account No / Wallet Address" required class="flex-grow p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white">
-                <button type="submit" class="px-6 py-3 bg-emerald-500 text-slate-950 font-bold rounded-xl">REQUEST WITHDRAW</button>
+                <button type="submit" class="px-6 py-3 bg-emerald-500 text-slate-950 font-bold rounded-xl">WITHDRAW</button>
             </form>
         </div>
 
-        <!-- User Links Table -->
+        <!-- Recent Links Table -->
         <div class="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-            <h2 class="text-lg font-bold text-slate-200 mb-4">Your Links</h2>
+            <h2 class="text-lg font-bold text-slate-200 mb-4">Your Recent Links</h2>
             <div class="space-y-3">
                 {% for item in links %}
-                <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
+                <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-2 text-xs">
                     <div>
                         <p class="font-mono text-cyan-400 font-bold">https://{{ host }}/go/{{ item.code }}</p>
                         <p class="text-slate-500 truncate max-w-md">{{ item.url }}</p>
                     </div>
                     <div class="text-right">
-                        <span class="text-emerald-400 font-bold">{{ item.clicks }} Clicks</span>
+                        <span class="text-emerald-400 font-bold"><i class="fa-solid fa-chart-simple mr-1"></i>{{ item.clicks }} Views</span>
                     </div>
                 </div>
                 {% endfor %}
@@ -88,7 +146,6 @@ USER_DASHBOARD = """
 </html>
 """
 
-# REDIRECTION MASKING PAGE (With Tech Article Disguise)
 PHASE_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -106,17 +163,16 @@ PHASE_HTML = """
     <div class="max-w-xl w-full bg-slate-900 p-6 rounded-3xl border border-cyan-500/30 text-center space-y-4">
         <h2 class="text-cyan-400 font-bold text-lg"><i class="fa-solid fa-shield-halved mr-2"></i>Security Check (Step {{ current_phase }} of {{ total_phases }})</h2>
         
-        <!-- Fake Article Masking Content to Stop Facebook/WhatsApp Block -->
         <div class="text-left text-xs bg-slate-950 p-4 rounded-xl border border-slate-800 text-slate-400 space-y-2">
             <p class="font-bold text-slate-200">Cloudflare Edge Verification</p>
-            <p>Scanning files for malware and verifying 256-bit SSL handshake connection. Please wait while your edge node is prepared...</p>
+            <p>Scanning files for malware and verifying 256-bit SSL connection. Please wait while your edge node is prepared...</p>
         </div>
 
         <div>{{ settings.nativeAd | safe }}</div>
 
         <div id="timer" class="text-4xl font-mono text-cyan-400 font-bold">{{ settings.timerSeconds }}</div>
         
-        <button id="btn" disabled onclick="goNext()" class="w-full py-4 bg-slate-800 text-slate-500 font-bold rounded-2xl">Verifying...</button>
+        <button id="btn" disabled onclick="goNext()" class="w-full py-4 bg-slate-800 text-slate-500 font-bold rounded-2xl">Verifying Security...</button>
     </div>
 
     <div>{{ settings.bannerBottom | safe }}</div>
@@ -148,11 +204,13 @@ PHASE_HTML = """
 </html>
 """
 
-# --- ROUTES ---
+
+# ==========================================
+# 🌐 FLASK WEB ROUTES
+# ==========================================
 @app.route('/')
 def home():
     if 'user' not in session:
-        # Default Demo User Session for instant test
         user = users_col.find_one({"username": "demo_publisher"})
         if not user:
             users_col.insert_one({"username": "demo_publisher", "balance": 0.0})
@@ -197,7 +255,6 @@ def withdraw():
         })
     return redirect('/')
 
-# Smart Geo-CPM & Multi-Phase Redirection
 @app.route('/go/<code>')
 def start_phase(code):
     return redirect(f'/go/{code}/phase/1')
@@ -209,20 +266,19 @@ def handle_phase(code, phase_num):
 
     # Password Check
     if url_data.get('password') and not request.args.get('pass_auth'):
-        return f'''<form action="/go/{code}/phase/1" method="GET" style="background:#090d16;color:white;padding:50px;text-align:center;">
+        return f'''<form action="/go/{code}/phase/1" method="GET" style="background:#090d16;color:white;padding:50px;text-align:center;font-family:sans-serif;">
                     <h2>🔐 Password Protected Link</h2>
-                    <input type="password" name="pass_auth" placeholder="Enter Password" style="padding:10px;">
-                    <button type="submit" style="padding:10px;background:#06b6d4;">Unlock</button>
+                    <input type="password" name="pass_auth" placeholder="Enter Password" style="padding:10px;border-radius:5px;border:none;">
+                    <button type="submit" style="padding:10px 20px;background:#06b6d4;border:none;border-radius:5px;cursor:pointer;font-weight:bold;">Unlock</button>
                    </form>'''
 
     settings = get_settings()
 
-    # Geo-Location Country & CPM Booster
+    # Geo CPM Rule (US/UK gets 3 phases, others get 2)
     ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-    # Detect Geo (High CPM Tier = 3 Phases, Low CPM Tier = 1 or 2 Phases)
     total_phases = 3 if "1.1.1." in ip else 2 
 
-    # Credit Publisher Balance on Phase 1
+    # Credit publisher earnings on Phase 1
     if phase_num == 1:
         owner = url_data.get('owner', 'demo_publisher')
         cpm_rate = settings['cpmRates'].get('DEFAULT', 2.0)
