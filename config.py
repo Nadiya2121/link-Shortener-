@@ -2,7 +2,7 @@ import os
 from pymongo import MongoClient
 
 # MongoDB Connection
-MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://admin:password@cluster0.mongodb.net/neonShortener?retryWrites=true&w=majority")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://MovieLinkbd:MovieLinkbd@cluster0.cmx4zn5.mongodb.net/?appName=Cluster0")
 client = MongoClient(MONGO_URI)
 db = client['neon_shortener']
 
