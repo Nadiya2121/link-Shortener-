@@ -107,7 +107,10 @@ LOGIN_HTML = """
             </button>
         </form>
 
-        <p class="text-xs text-center text-slate-500">Don't have an account? <a href="/register" class="text-cyan-400 font-bold hover:underline">Register Here</a></p>
+        <div class="pt-2 border-t border-slate-800/80 text-center space-y-2">
+            <p class="text-xs text-slate-500">Don't have an account? <a href="/register" class="text-cyan-400 font-bold hover:underline">Register Here</a></p>
+            <p class="text-xs text-slate-500">Forgot Password? <a href="{{ settings.supportUrl if settings and settings.supportUrl else 'https://t.me/MovieLinkbd' }}" target="_blank" class="text-fuchsia-400 font-bold hover:underline"><i class="fa-brands fa-telegram mr-1"></i>Contact Admin Support</a></p>
+        </div>
     </div>
 </body>
 </html>
@@ -260,19 +263,16 @@ USER_DASHBOARD = """
                 {% for item in links %}
                 <div class="p-4 bg-slate-950 rounded-xl border border-slate-800/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 overflow-hidden">
                     
-                    <!-- Link Details (Overflow Protected) -->
                     <div class="space-y-1 min-w-0 w-full md:w-3/4">
                         <p class="text-xs text-slate-500 truncate w-full" title="{{ item.url }}">Original: {{ item.url }}</p>
                         <p class="font-mono text-cyan-400 font-bold text-sm truncate w-full select-all">https://{{ host }}/go/{{ item.code }}</p>
                     </div>
 
-                    <!-- Actions & Clicks -->
                     <div class="flex items-center gap-3 w-full md:w-auto justify-between border-t md:border-t-0 border-slate-800 pt-2 md:pt-0 shrink-0">
                         <span class="text-xs bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800 text-emerald-400 font-bold">
                             <i class="fa-solid fa-eye mr-1"></i> {{ item.clicks }}
                         </span>
                         
-                        <!-- 1-CLICK COPY BUTTON -->
                         <button onclick="copyToClipboard('https://{{ host }}/go/{{ item.code }}', this)" 
                             class="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-lg transition duration-200 flex items-center gap-1">
                             <i class="fa-solid fa-copy"></i> <span>Copy</span>
@@ -289,7 +289,6 @@ USER_DASHBOARD = """
 
     </div>
 
-    <!-- 1-CLICK COPY SCRIPT -->
     <script>
         function copyToClipboard(text, btnElement) {
             navigator.clipboard.writeText(text).then(() => {
@@ -379,7 +378,7 @@ def home():
         return redirect('/login')
 
     user = users_col.find_one({"username": session['user']})
-    if not user:
+    if not user or user.get('is_blocked'):
         session.pop('user', None)
         return redirect('/login')
 
@@ -391,15 +390,18 @@ def home():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    settings = get_settings()
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
         user = users_col.find_one({"username": username, "password": password})
         if user:
+            if user.get('is_blocked'):
+                return render_template_string(LOGIN_HTML, error="Your account has been blocked by Admin!", settings=settings)
             session['user'] = username
             return redirect('/')
-        return render_template_string(LOGIN_HTML, error="Invalid Username or Password!")
-    return render_template_string(LOGIN_HTML)
+        return render_template_string(LOGIN_HTML, error="Invalid Username or Password!", settings=settings)
+    return render_template_string(LOGIN_HTML, settings=settings)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -411,7 +413,7 @@ def register():
         if users_col.find_one({"username": username}):
             return render_template_string(REGISTER_HTML, error="Username already exists!")
 
-        users_col.insert_one({"username": username, "email": email, "password": password, "balance": 0.0})
+        users_col.insert_one({"username": username, "email": email, "password": password, "balance": 0.0, "is_blocked": False})
         session['user'] = username
         return redirect('/')
     return render_template_string(REGISTER_HTML)
@@ -478,7 +480,7 @@ def handle_phase(code, phase_num):
     settings = get_settings()
     total_phases = settings.get('phaseCount', 2)
 
-    # Dynamic CPM Calculation ($1 CPM = $0.001 per view)
+    # Dynamic CPM Earnings ($1 CPM = $0.001 per view)
     if phase_num == 1:
         owner = url_data.get('owner')
         if owner:
