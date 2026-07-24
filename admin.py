@@ -1,4 +1,5 @@
 from flask import Blueprint, request, render_template_string, redirect
+from bson.objectid import ObjectId
 from config import settings_col, analytics_col, urls_col, withdrawals_col, users_col, get_settings
 
 admin_bp = Blueprint('admin', __name__)
@@ -44,7 +45,7 @@ ADMIN_HTML = """
                 <h2 class="text-lg font-bold text-fuchsia-400 flex items-center gap-2">
                     <i class="fa-solid fa-sliders"></i> System & Redirection Step Controls
                 </h2>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                         <label class="text-xs text-slate-400 font-bold block mb-1">Redirection Phase Count (Steps)</label>
                         <select name="phaseCount" class="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-cyan-400 font-bold focus:outline-none focus:border-cyan-500">
@@ -59,7 +60,11 @@ ADMIN_HTML = """
                     </div>
                     <div>
                         <label class="text-xs text-slate-400 font-bold block mb-1">Global CPM Rate ($ per 1000 views)</label>
-                        <input type="number" step="0.1" name="cpmRate" value="{{ settings.cpmRates.DEFAULT }}" class="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-emerald-400 font-bold focus:outline-none focus:border-emerald-500">
+                        <input type="number" step="0.1" name="cpmRate" value="{{ settings.cpmRate }}" class="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-emerald-400 font-bold focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 font-bold block mb-1">Minimum Withdrawal ($ Limit)</label>
+                        <input type="number" step="0.1" name="minWithdraw" value="{{ settings.minWithdraw }}" class="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-cyan-400 font-bold focus:outline-none focus:border-cyan-500">
                     </div>
                 </div>
             </div>
@@ -115,7 +120,7 @@ ADMIN_HTML = """
             </div>
         </form>
 
-        <!-- 💸 PENDING WITHDRAWALS SECTION -->
+        <!-- 💸 PENDING WITHDRAWALS SECTION (bKash / Nagad / Rocket) -->
         <div class="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-4">
             <h2 class="text-lg font-bold text-emerald-400 flex items-center gap-2">
                 <i class="fa-solid fa-money-bill-transfer"></i> Pending User Withdrawals
@@ -136,10 +141,11 @@ ADMIN_HTML = """
                         <tr class="hover:bg-slate-950/50">
                             <td class="p-3 text-white font-bold">{{ w.username }}</td>
                             <td class="p-3 text-emerald-400 font-bold">${{ w.amount }}</td>
-                            <td class="p-3"><span class="px-2 py-1 bg-slate-800 rounded">{{ w.method }}</span></td>
-                            <td class="p-3 font-mono text-cyan-300">{{ w.account }}</td>
-                            <td class="p-3">
-                                <a href="/admin/approve_withdrawal/{{ w._id }}" class="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg transition">Approve Payment</a>
+                            <td class="p-3"><span class="px-2 py-1 bg-slate-800 text-cyan-300 rounded font-bold">{{ w.method }}</span></td>
+                            <td class="p-3 font-mono text-cyan-300 font-bold">{{ w.account }}</td>
+                            <td class="p-3 space-x-2">
+                                <a href="/admin/approve_withdrawal/{{ w._id }}" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg transition">Approve & Paid</a>
+                                <a href="/admin/reject_withdrawal/{{ w._id }}" class="px-3 py-1.5 bg-rose-500 hover:bg-rose-400 text-white font-bold rounded-lg transition">Reject & Refund</a>
                             </td>
                         </tr>
                         {% else %}
@@ -205,13 +211,22 @@ def admin_page():
 
 @admin_bp.route('/admin/approve_withdrawal/<id>')
 def approve_withdrawal(id):
-    from bson.objectid import ObjectId
     withdrawals_col.update_one({"_id": ObjectId(id)}, {"$set": {"status": "Approved"}})
+    return redirect('/admin')
+
+@admin_bp.route('/admin/reject_withdrawal/<id>')
+def reject_withdrawal(id):
+    w = withdrawals_col.find_one({"_id": ObjectId(id)})
+    if w:
+        # Refund balance back to user
+        users_col.update_one({"username": w['username']}, {"$inc": {"balance": w['amount']}})
+        withdrawals_col.update_one({"_id": ObjectId(id)}, {"$set": {"status": "Rejected"}})
     return redirect('/admin')
 
 @admin_bp.route('/admin/save', methods=['POST'])
 def save_settings():
-    cpm = float(request.form.get('cpmRate', 2.0))
+    cpm = float(request.form.get('cpmRate', 1.0))
+    min_w = float(request.form.get('minWithdraw', 2.0))
     
     settings_col.update_one(
         {"_id": "global_settings"},
@@ -225,6 +240,8 @@ def save_settings():
             "bannerTop": request.form.get('bannerTop'),
             "bannerBottom": request.form.get('bannerBottom'),
             "nativeAd": request.form.get('nativeAd'),
+            "cpmRate": cpm,
+            "minWithdraw": min_w,
             "cpmRates.DEFAULT": cpm
         }}
     )
