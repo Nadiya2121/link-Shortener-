@@ -24,7 +24,7 @@ ADMIN_HTML = """
                 <h1 class="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-fuchsia-500">
                     <i class="fa-solid fa-crown mr-2"></i>MASTER SYSTEM CONTROL
                 </h1>
-                <p class="text-xs text-slate-400">Complete Control over Ads, Timers, Phases, Domains & Withdrawals</p>
+                <p class="text-xs text-slate-400">Complete Control over Users, Ads, Timers, Phases & Withdrawals</p>
             </div>
             <div class="flex items-center gap-4">
                 <div class="bg-slate-950 px-4 py-2 border border-slate-800 rounded-xl text-center">
@@ -34,6 +34,53 @@ ADMIN_HTML = """
                 <a href="/" class="bg-slate-800 hover:bg-slate-700 px-4 py-3 rounded-xl text-xs font-bold text-slate-300">
                     <i class="fa-solid fa-globe mr-1"></i> User Site
                 </a>
+            </div>
+        </div>
+
+        <!-- 👥 REGISTERED USERS MANAGEMENT & PASSWORD RESET -->
+        <div class="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-4">
+            <h2 class="text-lg font-bold text-cyan-400 flex items-center gap-2">
+                <i class="fa-solid fa-users-gear"></i> Registered Users & Password Reset
+            </h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs text-slate-400">
+                    <thead class="bg-slate-950 text-slate-200 border-b border-slate-800">
+                        <tr>
+                            <th class="p-3">Username</th>
+                            <th class="p-3">Email</th>
+                            <th class="p-3">Balance</th>
+                            <th class="p-3">Status</th>
+                            <th class="p-3">Reset Password</th>
+                            <th class="p-3">Account Control</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800">
+                        {% for u in users %}
+                        <tr class="hover:bg-slate-950/50">
+                            <td class="p-3 text-white font-bold">{{ u.username }}</td>
+                            <td class="p-3 text-slate-400">{{ u.email }}</td>
+                            <td class="p-3 text-emerald-400 font-bold">${{ "%.2f"|format(u.balance) }}</td>
+                            <td class="p-3">
+                                <span class="px-2 py-1 rounded font-bold {% if u.is_blocked %}bg-rose-500/10 text-rose-400 border border-rose-500/30{% else %}bg-emerald-500/10 text-emerald-400 border border-emerald-500/30{% endif %}">
+                                    {% if u.is_blocked %}BLOCKED{% else %}ACTIVE{% endif %}
+                                </span>
+                            </td>
+                            <td class="p-3">
+                                <form action="/admin/reset_user_password" method="POST" class="flex gap-1">
+                                    <input type="hidden" name="username" value="{{ u.username }}">
+                                    <input type="text" name="new_password" placeholder="New Password" required class="p-1.5 bg-slate-950 border border-slate-800 rounded text-cyan-300 w-28 text-xs focus:outline-none">
+                                    <button type="submit" class="px-3 py-1.5 bg-cyan-500 text-slate-950 font-bold rounded hover:bg-cyan-400 transition">Reset</button>
+                                </form>
+                            </td>
+                            <td class="p-3">
+                                <a href="/admin/toggle_block_user/{{ u.username }}" class="px-3 py-1.5 {% if u.is_blocked %}bg-emerald-500 text-slate-950{% else %}bg-rose-500 text-white{% endif %} font-bold rounded transition">
+                                    {% if u.is_blocked %}Unblock{% else %}Block User{% endif %}
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -120,7 +167,7 @@ ADMIN_HTML = """
             </div>
         </form>
 
-        <!-- 💸 PENDING WITHDRAWALS SECTION (bKash / Nagad / Rocket) -->
+        <!-- 💸 PENDING WITHDRAWALS SECTION -->
         <div class="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-4">
             <h2 class="text-lg font-bold text-emerald-400 flex items-center gap-2">
                 <i class="fa-solid fa-money-bill-transfer"></i> Pending User Withdrawals
@@ -195,8 +242,8 @@ def admin_page():
     settings = get_settings()
     withdrawals = list(withdrawals_col.find({"status": "Pending"}))
     analytics = list(analytics_col.find().sort('_id', -1).limit(30))
+    users = list(users_col.find().sort('_id', -1))
     
-    # Calculate Total System Clicks
     total_clicks = 0
     for u in urls_col.find():
         total_clicks += u.get('clicks', 0)
@@ -206,8 +253,25 @@ def admin_page():
         settings=settings, 
         withdrawals=withdrawals, 
         analytics=analytics, 
+        users=users,
         total_clicks=total_clicks
     )
+
+@admin_bp.route('/admin/reset_user_password', methods=['POST'])
+def reset_user_password():
+    username = request.form.get('username')
+    new_password = request.form.get('new_password')
+    if username and new_password:
+        users_col.update_one({"username": username}, {"$set": {"password": new_password}})
+    return redirect('/admin')
+
+@admin_bp.route('/admin/toggle_block_user/<username>')
+def toggle_block_user(username):
+    u = users_col.find_one({"username": username})
+    if u:
+        new_status = not u.get('is_blocked', False)
+        users_col.update_one({"username": username}, {"$set": {"is_blocked": new_status}})
+    return redirect('/admin')
 
 @admin_bp.route('/admin/approve_withdrawal/<id>')
 def approve_withdrawal(id):
@@ -218,7 +282,6 @@ def approve_withdrawal(id):
 def reject_withdrawal(id):
     w = withdrawals_col.find_one({"_id": ObjectId(id)})
     if w:
-        # Refund balance back to user
         users_col.update_one({"username": w['username']}, {"$inc": {"balance": w['amount']}})
         withdrawals_col.update_one({"_id": ObjectId(id)}, {"$set": {"status": "Rejected"}})
     return redirect('/admin')
