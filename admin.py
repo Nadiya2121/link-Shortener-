@@ -116,12 +116,12 @@ ADMIN_HTML = """
                 </div>
             </div>
 
-            <!-- 🌐 DOMAIN ROTATOR SETTINGS -->
+            <!-- 🌐 DOMAIN ROTATOR & TELEGRAM SUPPORT SETTINGS -->
             <div class="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-4">
                 <h2 class="text-lg font-bold text-cyan-400 flex items-center gap-2">
-                    <i class="fa-solid fa-network-wired"></i> Domain Rotator & Anti-Block Config
+                    <i class="fa-solid fa-network-wired"></i> Domain & Contact Support Config
                 </h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label class="text-xs text-slate-400 font-bold block mb-1">Primary Domain Name</label>
                         <input type="text" name="primaryDomain" value="{{ settings.primaryDomain }}" class="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-cyan-300 font-mono text-xs">
@@ -129,6 +129,10 @@ ADMIN_HTML = """
                     <div>
                         <label class="text-xs text-slate-400 font-bold block mb-1">Backup Domain Rotator URL</label>
                         <input type="text" name="backupDomain" value="{{ settings.backupDomain }}" class="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-cyan-300 font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 font-bold block mb-1 text-fuchsia-400"><i class="fa-brands fa-telegram mr-1"></i> Telegram Support URL (Forgot Pass)</label>
+                        <input type="text" name="supportUrl" value="{{ settings.supportUrl if settings.supportUrl else 'https://t.me/ProBotDeveloperBot' }}" placeholder="https://t.me/MovieLinkbd" class="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-fuchsia-300 font-mono text-xs focus:outline-none focus:border-fuchsia-400">
                     </div>
                 </div>
             </div>
@@ -298,6 +302,7 @@ def save_settings():
             "timerSeconds": int(request.form.get('timerSeconds', 8)),
             "primaryDomain": request.form.get('primaryDomain'),
             "backupDomain": request.form.get('backupDomain'),
+            "supportUrl": request.form.get('supportUrl', 'https://t.me/MovieLinkbd'), # সাপোর্ট টেলিগ্রাম লিংক
             "popunderCode": request.form.get('popunderCode'),
             "directLinkUrl": request.form.get('directLinkUrl'),
             "bannerTop": request.form.get('bannerTop'),
